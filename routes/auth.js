@@ -1,7 +1,9 @@
 import bcrypt from "bcryptjs";
 import express from "express";
-import Response from "../lib/Response.js";
 import cookieOptions from "../config/cookieOptions.js";
+import Response from "../lib/Response.js";
+import logger from "../logger/logger.js";
+import authMiddleware from "../middlewares/auth.js";
 import { User, validateLoginData, validateUser } from "../models/User.js";
 
 const router = express.Router();
@@ -39,7 +41,8 @@ router.post("/sign-up", async (req, res) => {
       .status(201)
       .cookie("token", token, cookieOptions)
       .send(new Response(true, "User created"));
-  } catch (err) {
+  } catch (error) {
+    logger.error({ message: "During Sign-up", error });
     return res.status(500).send(new Response(false, "Internal server error"));
   }
 });
@@ -72,11 +75,50 @@ router.post("/log-in", async (req, res) => {
 
     const token = user.generateAuthToken();
 
-    res
-      .status(201)
+    return res
+      .status(200)
       .cookie("token", token, cookieOptions)
       .send(new Response(true, "Login success"));
-  } catch (err) {
+  } catch (error) {
+    logger.error({ message: "During Login", error });
+    return res.status(500).send(new Response(false, "Internal server error"));
+  }
+});
+
+router.post("/log-out", async (req, res) => {
+  try {
+    res
+      .status(200)
+      .cookie("token", "", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 0,
+      })
+      .send(new Response(true, "Logout successful"));
+  } catch (error) {
+    logger.error({ message: "During Logout", error });
+    return res.status(500).send(new Response(false, "Internal server error"));
+  }
+});
+
+router.post("/refresh-session", authMiddleware, async (req, res) => {
+  try {
+    const requestUser = req.user;
+    const user = await User.findById(requestUser._id);
+
+    if (!user) {
+      return res.status(404).send(new Response(false, "User not found"));
+    }
+
+    const token = user.generateAuthToken();
+
+    return res
+      .status(200)
+      .cookie("token", token, cookieOptions)
+      .send(new Response(true, "Session refreshed"));
+  } catch (error) {
+    logger.error({ message: "During Session Refresh", error });
     return res.status(500).send(new Response(false, "Internal server error"));
   }
 });
