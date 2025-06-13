@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
+import Joi from "joi";
 import jwt from "jsonwebtoken";
-import * as z from "zod";
+import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema(
   {
@@ -65,66 +65,91 @@ UserSchema.methods.generateAuthToken = function () {
 };
 
 const validateUser = (user) => {
-  const schema = z.object({
-    firstName: z
-      .string()
-      .min(1, { message: "First name is required and cannot be empty" })
-      .max(255, { message: "First name cannot exceed 255 characters" })
-      .regex(/^[a-zA-Z]+$/, {
-        message: "First name can only contain letters",
+  const passwordComplexity = (value, helpers) => {
+    if (!/[A-Z]/.test(value)) {
+      return helpers.message(
+        "Password must contain at least one uppercase letter"
+      );
+    }
+    if (!/[a-z]/.test(value)) {
+      return helpers.message(
+        "Password must contain at least one lowercase letter"
+      );
+    }
+    if (!/[0-9]/.test(value)) {
+      return helpers.message("Password must contain at least one number");
+    }
+    if (!/[^A-Za-z0-9]/.test(value)) {
+      return helpers.message(
+        "Password must contain at least one special character"
+      );
+    }
+    return value;
+  };
+  const schema = Joi.object({
+    firstName: Joi.string()
+      .min(1)
+      .max(255)
+      .regex(/^[a-zA-Z]+$/)
+      .required()
+      .messages({
+        "string.empty": "First name is required and cannot be empty",
+        "string.min": "First name is required and cannot be empty",
+        "string.max": "First name cannot exceed 255 characters",
+        "string.pattern.base": "First name can only contain letters",
       }),
-    lastName: z
-      .string()
-      .min(1, { message: "Last name is required and cannot be empty" })
-      .max(255, { message: "Last name cannot exceed 255 characters" })
-      .regex(/^[a-zA-Z]+$/, {
-        message: "Last name can only contain letters",
+    lastName: Joi.string()
+      .min(1)
+      .max(255)
+      .regex(/^[a-zA-Z]+$/)
+      .required()
+      .messages({
+        "string.empty": "Last name is required and cannot be empty",
+        "string.min": "Last name is required and cannot be empty",
+        "string.max": "Last name cannot exceed 255 characters",
+        "string.pattern.base": "Last name can only contain letters",
       }),
-    image: z
-      .string()
-      .url({ message: "Image must be a valid URL" })
-      .max(1000, { message: "Image URL cannot exceed 1000 characters" })
-      .optional(),
-    email: z
-      .string()
-      .min(5, { message: "Email must be at least 5 characters long" })
-      .max(255, { message: "Email cannot exceed 255 characters" })
-      .email({ message: "Please provide a valid email address" }),
-    password: z
-      .string()
-      .min(8, { message: "Password must be at least 8 characters long" })
-      .max(100, { message: "Password cannot exceed 100 characters" })
-      .regex(/[A-Z]/, {
-        message: "Password must contain at least one uppercase letter",
-      })
-      .regex(/[a-z]/, {
-        message: "Password must contain at least one lowercase letter",
-      })
-      .regex(/[0-9]/, { message: "Password must contain at least one number" })
-      .regex(/[^A-Za-z0-9]/, {
-        message: "Password must contain at least one special character",
+    image: Joi.string().uri().max(1000).optional().messages({
+      "string.uri": "Image must be a valid URL",
+      "string.max": "Image URL cannot exceed 1000 characters",
+    }),
+    email: Joi.string().min(5).max(255).required().email().messages({
+      "string.min": "Email must be at least 5 characters long",
+      "string.max": "Email cannot exceed 255 characters",
+      "string.email": "Please provide a valid email address",
+      "string.empty": "Email is required and cannot be empty",
+    }),
+    password: Joi.string()
+      .min(8)
+      .max(1000)
+      .required()
+      .custom(passwordComplexity)
+      .messages({
+        "string.empty": "Password is required",
+        "string.min": "Password must be at least 8 characters long",
+        "string.max": "Password cannot exceed 1000 characters",
       }),
   });
 
-  return schema.parse(user);
+  return schema.validate(user);
 };
 
 const validateLoginData = (data) => {
-  const schema = z.object({
-    email: z
-      .string()
-      .min(5, { message: "Email must be at least 5 characters long" })
-      .max(255, { message: "Email cannot exceed 255 characters" })
-      .email({ message: "Please provide a valid email address" }),
-    password: z
-      .string()
-      .min(8, { message: "Password must be at least 8 characters long" })
-      .max(100, { message: "Password cannot exceed 100 characters" }),
+  const schema = Joi.object({
+    email: Joi.string().min(5).max(255).required().email().messages({
+      "string.min": "Email must be at least 5 characters long",
+      "string.max": "Email cannot exceed 255 characters",
+      "string.email": "Please provide a valid email address",
+    }),
+    password: Joi.string().min(8).max(100).required().messages({
+      "string.min": "Password must be at least 8 characters long",
+      "string.max": "Password cannot exceed 100 characters",
+    }),
   });
 
-  return schema.parse(data);
+  return schema.validate(data);
 };
 
 const User = mongoose.model("User", UserSchema);
 
-export { validateUser, validateLoginData, User };
+export { User, validateLoginData, validateUser };
