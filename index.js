@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import logger from "./logger/logger.js";
 import auth from "./routes/auth.js";
+import categorys from "./routes/categorys.js";
 
 dotenv.config();
 const app = express();
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", auth);
+app.use("/api/categorys", categorys);
 
 const port = process.env.PORT || 7000;
 
