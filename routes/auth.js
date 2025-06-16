@@ -3,7 +3,7 @@ import express from "express";
 import cookieOptions from "../config/cookieOptions.js";
 import Response from "../lib/Response.js";
 import logger from "../logger/logger.js";
-import authMiddleware from "../middlewares/auth.js";
+import auth from "../middlewares/auth.js";
 import { User, validateLoginData, validateUser } from "../models/User.js";
 
 const router = express.Router();
@@ -102,7 +102,7 @@ router.post("/log-out", async (req, res) => {
   }
 });
 
-router.post("/refresh-session", authMiddleware, async (req, res) => {
+router.post("/refresh-session", auth, async (req, res) => {
   try {
     const requestUser = req.user;
     const user = await User.findById(requestUser._id);
