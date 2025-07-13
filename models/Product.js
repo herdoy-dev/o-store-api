@@ -1,7 +1,7 @@
 import Joi from "joi";
 import mongoose from "mongoose";
 
-const CategorySchema = new mongoose.Schema(
+const ProductSchema = new mongoose.Schema(
   {
     name: {
       type: String,
@@ -158,6 +158,6 @@ const validateProduct = (product) => {
   return schema.validate(product);
 };
 
-const Product = mongoose.model("Product", CategorySchema);
+const Product = mongoose.model("Product", ProductSchema);
 
 export { Product, validateProduct };
