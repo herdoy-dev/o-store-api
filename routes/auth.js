@@ -37,10 +37,7 @@ router.post("/sign-up", async (req, res) => {
 
     const token = newUser.generateAuthToken();
 
-    res
-      .status(201)
-      .cookie("token", token, cookieOptions)
-      .send(new Response(true, "User created"));
+    res.status(201).send(new Response(true, "User created", token));
   } catch (error) {
     logger.error({ message: "During Sign-up", error });
     return res.status(500).send(new Response(false, "Internal server error"));
@@ -75,10 +72,7 @@ router.post("/log-in", async (req, res) => {
 
     const token = user.generateAuthToken();
 
-    return res
-      .status(200)
-      .cookie("token", token, cookieOptions)
-      .send(new Response(true, "Login success"));
+    return res.status(200).send(new Response(true, "Login success", token));
   } catch (error) {
     logger.error({ message: "During Login", error });
     return res.status(500).send(new Response(false, "Internal server error"));
