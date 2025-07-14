@@ -44,31 +44,40 @@ router.get("/", async (req, res) => {
     const {
       search,
       orderBy,
+      categoryId,
+      price,
       sortOrder = "asc",
       page = 1,
       pageSize = 10,
       ...filters
     } = req.query;
 
+    const setPrice = price ? parseInt(price) : null;
     // Validate pagination parameters
     const parsedPage = Math.max(1, parseInt(page));
     const parsedPageSize = Math.min(100, Math.max(1, parseInt(pageSize)));
 
     // Base query - only show products belonging to the authenticated user
-    let query = Product.find()
+    let query = Product.find(categoryId ? { category: categoryId } : {})
       .populate("category", "name")
       .populate("user", "firstName lastName");
 
     // Apply search filter if provided
     if (search && typeof search === "string") {
       query = query.or([
-        { title: { $regex: search.trim(), $options: "i" } },
+        { name: { $regex: search.trim(), $options: "i" } },
         { description: { $regex: search.trim(), $options: "i" } },
       ]);
     }
 
+    if (setPrice) {
+      query = query.find({
+        price: { $lte: setPrice },
+      });
+    }
+
     // Apply additional filters
-    const allowedFilters = ["name", "colors", "sizes", "price"];
+    const allowedFilters = ["name", "colors", "sizes"];
     Object.keys(filters).forEach((key) => {
       if (allowedFilters.includes(key)) {
         query = query.where(key).equals(filters[key]);
@@ -78,7 +87,7 @@ router.get("/", async (req, res) => {
     // Apply sorting if specified
     if (orderBy && typeof orderBy === "string") {
       const sortDirection = sortOrder.toLowerCase() === "desc" ? -1 : 1;
-      const validSortFields = ["title", "price", "createdAt"]; // Add other sortable fields
+      const validSortFields = ["name", "price", "createdAt"];
       if (validSortFields.includes(orderBy)) {
         query = query.sort({ [orderBy]: sortDirection });
       }
@@ -95,8 +104,8 @@ router.get("/", async (req, res) => {
     const countQuery = Product.find();
 
     if (search && typeof search === "string") {
-      countQuery.or([
-        { title: { $regex: search.trim(), $options: "i" } },
+      query = query.or([
+        { name: { $regex: search.trim(), $options: "i" } },
         { description: { $regex: search.trim(), $options: "i" } },
       ]);
     }
@@ -135,31 +144,44 @@ router.get("/my", auth, async (req, res) => {
     const {
       search,
       orderBy,
+      categoryId,
+      price,
       sortOrder = "asc",
       page = 1,
       pageSize = 10,
       ...filters
     } = req.query;
 
+    const setPrice = price ? parseInt(price) : null;
     // Validate pagination parameters
     const parsedPage = Math.max(1, parseInt(page));
     const parsedPageSize = Math.min(100, Math.max(1, parseInt(pageSize)));
 
     // Base query - only show products belonging to the authenticated user
-    let query = Product.find({ user: req.user._id })
+    let query = Product.find(
+      categoryId
+        ? { category: categoryId, user: req.user._id }
+        : { user: req.user._id }
+    )
       .populate("category", "name")
       .populate("user", "firstName lastName");
 
     // Apply search filter if provided
     if (search && typeof search === "string") {
       query = query.or([
-        { title: { $regex: search.trim(), $options: "i" } },
+        { name: { $regex: search.trim(), $options: "i" } },
         { description: { $regex: search.trim(), $options: "i" } },
       ]);
     }
 
+    if (setPrice) {
+      query = query.find({
+        price: { $lte: setPrice },
+      });
+    }
+
     // Apply additional filters
-    const allowedFilters = ["name", "colors", "sizes", "price"];
+    const allowedFilters = ["name", "colors", "sizes"];
     Object.keys(filters).forEach((key) => {
       if (allowedFilters.includes(key)) {
         query = query.where(key).equals(filters[key]);
@@ -169,7 +191,7 @@ router.get("/my", auth, async (req, res) => {
     // Apply sorting if specified
     if (orderBy && typeof orderBy === "string") {
       const sortDirection = sortOrder.toLowerCase() === "desc" ? -1 : 1;
-      const validSortFields = ["title", "price", "createdAt"]; // Add other sortable fields
+      const validSortFields = ["name", "price", "createdAt"];
       if (validSortFields.includes(orderBy)) {
         query = query.sort({ [orderBy]: sortDirection });
       }
@@ -183,11 +205,11 @@ router.get("/my", auth, async (req, res) => {
     const products = await query.exec();
 
     // Get total count for pagination (with same filters)
-    const countQuery = Product.find({ user: req.user._id });
+    const countQuery = Product.find();
 
     if (search && typeof search === "string") {
-      countQuery.or([
-        { title: { $regex: search.trim(), $options: "i" } },
+      query = query.or([
+        { name: { $regex: search.trim(), $options: "i" } },
         { description: { $regex: search.trim(), $options: "i" } },
       ]);
     }
@@ -222,7 +244,7 @@ router.get("/my", auth, async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id).populate("category");
     if (!product)
       return res.status(401).send(new Response(false, "Invalid product id"));
     return res.status(200).send(new Response(true, "Success", product));
@@ -232,6 +254,50 @@ router.get("/:id", async (req, res) => {
       success: false,
       message: "An error occurred while fetching product",
     });
+  }
+});
+
+router.put("/:id", auth, async (req, res) => {
+  try {
+    // 1. Validate request body
+    const { error } = validateProduct(req.body);
+    if (error) {
+      return res
+        .status(400)
+        .send(new Response(false, error.details[0].message));
+    }
+
+    // 2. Verify user exists
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(400).send(new Response(false, "Invalid User"));
+    }
+
+    // 3. Verify category exists
+    const category = await Category.findById(req.body.category);
+    if (!category) {
+      return res.status(400).send(new Response(false, "Invalid Category"));
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...req.body,
+        user: user._id,
+      },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).send(new Response(false, "Product not found"));
+    }
+
+    return res
+      .status(200)
+      .send(new Response(true, "Product updated successfully", updatedProduct));
+  } catch (error) {
+    logger.error({ message: "Error during product update", error });
+    return res.status(500).send(new Response(false, "Internal server error"));
   }
 });
 

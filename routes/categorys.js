@@ -28,12 +28,10 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-router.get("/", auth, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const categorys = await Category.find();
-    return res
-      .status(200)
-      .send(new Response(true, "Category Created", categorys));
+    return res.status(200).send(new Response(true, "Success", categorys));
   } catch (error) {
     logger.error({ message: "During Fetch Categorys", error });
     return res.status(500).send(new Response(false, "Internal server error"));
