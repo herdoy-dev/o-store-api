@@ -8,9 +8,12 @@ import auth from "./routes/auth.js";
 import categorys from "./routes/categorys.js";
 import orders from "./routes/orders.js";
 import products from "./routes/products.js";
+import webhook from "./routes/webhook.js";
 
 dotenv.config();
 const app = express();
+app.use("/api/webhook", webhook);
+
 app.use(
   cors({
     origin: process.env.ORIGIN,

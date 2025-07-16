@@ -5,12 +5,114 @@ import auth from "../middlewares/auth.js";
 import { Address } from "../models/Address.js";
 import { Order, validateOrder } from "../models/Order.js";
 import { Product } from "../models/Product.js";
+import { Transaction } from "../models/Transaction.js";
 import { User } from "../models/User.js";
+import stripe from "../lib/stripe.js";
 
 const router = express.Router();
 
-// Create a new order
-router.post("/", auth, async (req, res) => {
+// Create a new order by pay on delivery
+router.post("/pay-on-delivery", auth, async (req, res) => {
+  try {
+    const { error } = validateOrder(req.body);
+    if (error)
+      return res
+        .status(400)
+        .json(new Response(false, error.details[0].message));
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json(new Response(false, "User not found"));
+    }
+
+    // Validate all products in the order
+    const products = await Product.find({
+      _id: { $in: req.body.items.map((item) => item.product) },
+    });
+
+    if (products.length !== req.body.items.length) {
+      return res
+        .status(400)
+        .json(new Response(false, "One or more products not found"));
+    }
+
+    const address = await Address.findOne({
+      _id: req.body.shippingAddress,
+      user: req.user._id,
+    });
+
+    if (!address) {
+      return res
+        .status(400)
+        .json(new Response(false, "Invalid shipping address"));
+    }
+
+    // Calculate subtotal
+    const subtotal = req.body.items.reduce((total, item) => {
+      return total + item.price * item.quantity;
+    }, 0);
+
+    const transaction = await Transaction.create({
+      user: user._id,
+      type: "checkout",
+      amount: subtotal,
+      status: "pending",
+    });
+
+    const order = new Order({
+      user: user._id,
+      items: req.body.items.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      shippingAddress: address._id,
+      subtotal,
+      status: "pending",
+      paymentStatus: "pending",
+    });
+
+    await order.save();
+
+    // Populate the order data before sending response
+    const populatedOrder = await Order.populate(order, [
+      { path: "user", select: "firstName lastName email" },
+      { path: "items.product", select: "name price images" },
+      { path: "shippingAddress" },
+    ]);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Checkout",
+            },
+            unit_amount: Math.round(subtotal * 100),
+          },
+          quantity: order.items.length,
+        },
+      ],
+      mode: "payment",
+      success_url: `${process.env.ORIGIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.ORIGIN}/payment-cancelled`,
+      metadata: {
+        transactionId: transaction._id.toString(),
+        orderId: populatedOrder._id.toString(),
+      },
+    });
+
+    return res.json({ url: session.url });
+  } catch (error) {
+    logger.error("Order creation failed", { error });
+    return res.status(500).json(new Response(false, "Internal server error"));
+  }
+});
+
+// Create a new order by cash on delivery
+router.post("/cash-on-delivery", auth, async (req, res) => {
   try {
     const { error } = validateOrder(req.body);
     if (error)
