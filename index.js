@@ -6,6 +6,7 @@ import logger from "./logger/logger.js";
 import addresses from "./routes/addresses.js";
 import auth from "./routes/auth.js";
 import categorys from "./routes/categorys.js";
+import contacts from "./routes/contacts.js";
 import orders from "./routes/orders.js";
 import products from "./routes/products.js";
 import webhook from "./routes/webhook.js";
@@ -27,6 +28,7 @@ app.use("/api/auth", auth);
 app.use("/api/categorys", categorys);
 app.use("/api/products", products);
 app.use("/api/addresses", addresses);
+app.use("/api/contacts", contacts);
 app.use("/api/orders", orders);
 
 const port = process.env.PORT || 7000;
